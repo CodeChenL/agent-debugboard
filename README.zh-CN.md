@@ -12,7 +12,7 @@
 
 Agent DebugBoard 面向自动化 bring-up、远程恢复、产测和 AI agent 调试链路。
 固件会枚举为名为 `Agent DebugBoard` 的 USB CDC ACM 串口设备，并提供
-`debugboard` shell 命令；仓库里同时提供了主机侧 Python CLI，方便脚本或
+`debugboard` shell 命令；仓库里同时提供了主机侧 Go native CLI，方便脚本或
 Agent 直接调用。
 
 本仓库包含 Zephyr 应用、主机侧辅助工具、单元测试、原理图副本和项目文档。
@@ -34,7 +34,52 @@ Agent 直接调用。
 ## 安装主机侧 CLI
 
 `agent-debugboardctl` 是 Go native binary。用户不需要 Python、pip 或虚拟环境。
-从 `Build` workflow run 下载匹配 OS 和 CPU 的产物：
+
+公开仓库可以在 macOS / Linux 上通过 `curl` 或 `wget` 一行安装最新版：
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/xzl01/agent-debugboard/main/scripts/install.sh | sh
+wget -qO- https://raw.githubusercontent.com/xzl01/agent-debugboard/main/scripts/install.sh | sh
+```
+
+也可以指定版本或安装目录：
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/xzl01/agent-debugboard/main/scripts/install.sh | VERSION=v0.0.2 sh
+curl -fsSL https://raw.githubusercontent.com/xzl01/agent-debugboard/main/scripts/install.sh | INSTALL_DIR=/usr/local/bin sh
+```
+
+当前仓库是私有仓库时，需要先提供 GitHub token。已经登录 GitHub CLI 的机器可
+以直接使用 `gh auth token`：
+
+```sh
+export GH_TOKEN="$(gh auth token)"
+curl -fsSL \
+  -H "Authorization: Bearer $GH_TOKEN" \
+  -H "Accept: application/vnd.github.raw" \
+  "https://api.github.com/repos/xzl01/agent-debugboard/contents/scripts/install.sh?ref=main" | sh
+wget -qO- \
+  --header="Authorization: Bearer $GH_TOKEN" \
+  --header="Accept: application/vnd.github.raw" \
+  "https://api.github.com/repos/xzl01/agent-debugboard/contents/scripts/install.sh?ref=main" | sh
+```
+
+Windows PowerShell：
+
+```powershell
+irm https://raw.githubusercontent.com/xzl01/agent-debugboard/main/scripts/install.ps1 | iex
+```
+
+私有仓库 PowerShell：
+
+```powershell
+$env:GH_TOKEN = gh auth token
+irm `
+  -Headers @{Authorization = "Bearer $env:GH_TOKEN"; Accept = "application/vnd.github.raw"} `
+  "https://api.github.com/repos/xzl01/agent-debugboard/contents/scripts/install.ps1?ref=main" | iex
+```
+
+也可以从 GitHub Release 手动下载匹配 OS 和 CPU 的产物：
 
 | 系统 / CPU | 产物 |
 | --- | --- |
@@ -45,25 +90,19 @@ Agent 直接调用。
 | macOS Intel | `agent-debugboardctl_darwin_amd64.tar.gz` |
 | macOS Apple Silicon | `agent-debugboardctl_darwin_arm64.tar.gz` |
 
-Windows PowerShell：
-
-```powershell
-.\agent-debugboardctl.exe --help
-```
-
-Linux / macOS：
+macOS 上未签名的 release 二进制可能触发 Gatekeeper，提示 Apple 无法验证软件。
+安装脚本会先校验 `SHA256SUMS.txt`，再移除安装后二进制的 quarantine 标记。
+如果手动安装，请先校验 SHA256，再执行：
 
 ```sh
-chmod +x ./agent-debugboardctl
-sudo install -m 755 ./agent-debugboardctl /usr/local/bin/agent-debugboardctl
+xattr -dr com.apple.quarantine ./agent-debugboardctl
+```
+
+安装后验证：
+
+```sh
 agent-debugboardctl --help
-```
-
-开发者可以从源码构建：
-
-```sh
-go build -o agent-debugboardctl ./cmd/agent-debugboardctl
-./agent-debugboardctl --help
+agent-debugboardctl --version
 ```
 
 ## 构建固件
@@ -114,22 +153,26 @@ picotool load -v -x build/agent_debugboard/zephyr/zephyr.uf2
 
 ## GitHub Actions 产物
 
-`Build` workflow 会把固件发布为 `agent-debugboard-rp2040-firmware`，把主机侧
-CLI 归档发布为 `agent-debugboardctl-native-packages`。
+`Build` workflow 会检查每次 push 和 pull request。推送 `v*` tag 会触发
+`Release` workflow，自动构建固件、打包主机 CLI、创建 GitHub Release，并上传
+固定命名的 release assets。
 
-- `agent-debugboard-rp2040-firmware`：RP2040 的 UF2、ELF 和 map 文件。
+- `agent-debugboard-rp2040.uf2`：用于拖拽刷写或 `picotool` 的 RP2040 固件。
+- `agent-debugboard-rp2040.elf`：用于调试的 RP2040 ELF。
+- `agent-debugboard-rp2040.map`：RP2040 链接 map。
 - `agent-debugboardctl_windows_amd64.zip`：Windows x64 native CLI。
 - `agent-debugboardctl_windows_arm64.zip`：Windows arm64 native CLI。
 - `agent-debugboardctl_linux_amd64.tar.gz`：Linux x64 native CLI。
 - `agent-debugboardctl_linux_arm64.tar.gz`：Linux arm64 native CLI。
 - `agent-debugboardctl_darwin_amd64.tar.gz`：macOS Intel native CLI。
 - `agent-debugboardctl_darwin_arm64.tar.gz`：macOS Apple Silicon native CLI。
-- `checksums.txt`：host CLI 压缩包的 SHA256 校验文件。
+- `SHA256SUMS.txt`：所有 release assets 的 SHA256 校验文件。
 
-下载 host CLI 产物并解压后，可以直接运行：
+开发者可以从源码构建 host CLI：
 
 ```sh
-agent-debugboardctl --help
+go build -o agent-debugboardctl ./cmd/agent-debugboardctl
+./agent-debugboardctl --help
 ```
 
 ## 主机侧使用

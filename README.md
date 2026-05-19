@@ -12,7 +12,7 @@ current-monitor ADC channels, and a small safe GPIO surface.
 
 Agent DebugBoard is designed for automated board bring-up, recovery, production
 test, and remote debugging workflows. The firmware exposes a USB CDC ACM shell
-named `Agent DebugBoard`, plus a host-side Python helper that turns board
+named `Agent DebugBoard`, plus a host-side native Go CLI that turns board
 operations into scriptable commands.
 
 This repository contains the Zephyr application, host helper, unit tests,
@@ -36,8 +36,54 @@ exposed as a controllable output rail.
 ## Install Host CLI
 
 `agent-debugboardctl` is a native Go binary. Users do not need Python, pip, or a
-virtual environment. Download the artifact matching your OS and CPU from a
-`Build` workflow run:
+virtual environment.
+
+For a public checkout, install the latest release on macOS or Linux with either
+`curl` or `wget`:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/xzl01/agent-debugboard/main/scripts/install.sh | sh
+wget -qO- https://raw.githubusercontent.com/xzl01/agent-debugboard/main/scripts/install.sh | sh
+```
+
+Install a specific version or choose a target directory:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/xzl01/agent-debugboard/main/scripts/install.sh | VERSION=v0.0.2 sh
+curl -fsSL https://raw.githubusercontent.com/xzl01/agent-debugboard/main/scripts/install.sh | INSTALL_DIR=/usr/local/bin sh
+```
+
+For the current private repository, export a GitHub token first. `gh auth token`
+works if the GitHub CLI is logged in:
+
+```sh
+export GH_TOKEN="$(gh auth token)"
+curl -fsSL \
+  -H "Authorization: Bearer $GH_TOKEN" \
+  -H "Accept: application/vnd.github.raw" \
+  "https://api.github.com/repos/xzl01/agent-debugboard/contents/scripts/install.sh?ref=main" | sh
+wget -qO- \
+  --header="Authorization: Bearer $GH_TOKEN" \
+  --header="Accept: application/vnd.github.raw" \
+  "https://api.github.com/repos/xzl01/agent-debugboard/contents/scripts/install.sh?ref=main" | sh
+```
+
+Windows PowerShell:
+
+```powershell
+irm https://raw.githubusercontent.com/xzl01/agent-debugboard/main/scripts/install.ps1 | iex
+```
+
+Private repository PowerShell:
+
+```powershell
+$env:GH_TOKEN = gh auth token
+irm `
+  -Headers @{Authorization = "Bearer $env:GH_TOKEN"; Accept = "application/vnd.github.raw"} `
+  "https://api.github.com/repos/xzl01/agent-debugboard/contents/scripts/install.ps1?ref=main" | iex
+```
+
+Manual downloads are also available from each GitHub Release:
 
 | OS / CPU | Artifact |
 | --- | --- |
@@ -48,25 +94,20 @@ virtual environment. Download the artifact matching your OS and CPU from a
 | macOS Intel | `agent-debugboardctl_darwin_amd64.tar.gz` |
 | macOS Apple Silicon | `agent-debugboardctl_darwin_arm64.tar.gz` |
 
-Windows PowerShell:
-
-```powershell
-.\agent-debugboardctl.exe --help
-```
-
-Linux / macOS:
+On macOS, unsigned release binaries may trigger a Gatekeeper warning saying Apple
+cannot verify the software. The installer verifies `SHA256SUMS.txt` first and
+then removes the quarantine flag from the installed binary. If installing
+manually, verify the checksum and run:
 
 ```sh
-chmod +x ./agent-debugboardctl
-sudo install -m 755 ./agent-debugboardctl /usr/local/bin/agent-debugboardctl
+xattr -dr com.apple.quarantine ./agent-debugboardctl
+```
+
+After installation:
+
+```sh
 agent-debugboardctl --help
-```
-
-Developers can build it from source:
-
-```sh
-go build -o agent-debugboardctl ./cmd/agent-debugboardctl
-./agent-debugboardctl --help
+agent-debugboardctl --version
 ```
 
 ## Build Firmware
@@ -118,22 +159,26 @@ picotool load -v -x build/agent_debugboard/zephyr/zephyr.uf2
 
 ## GitHub Actions Artifacts
 
-The `Build` workflow publishes firmware as `agent-debugboard-rp2040-firmware`
-and host CLI archives as `agent-debugboardctl-native-packages`.
+The `Build` workflow checks every push and pull request. Tagging `v*` triggers
+the `Release` workflow, which builds firmware, packages the host CLI, creates a
+GitHub Release, and uploads the fixed release assets.
 
-- `agent-debugboard-rp2040-firmware`: UF2, ELF, and map files for RP2040.
+- `agent-debugboard-rp2040.uf2`: RP2040 firmware for drag-and-drop or `picotool`.
+- `agent-debugboard-rp2040.elf`: RP2040 ELF for debugging.
+- `agent-debugboard-rp2040.map`: RP2040 linker map.
 - `agent-debugboardctl_windows_amd64.zip`: native Windows x64 CLI.
 - `agent-debugboardctl_windows_arm64.zip`: native Windows arm64 CLI.
 - `agent-debugboardctl_linux_amd64.tar.gz`: native Linux x64 CLI.
 - `agent-debugboardctl_linux_arm64.tar.gz`: native Linux arm64 CLI.
 - `agent-debugboardctl_darwin_amd64.tar.gz`: native macOS Intel CLI.
 - `agent-debugboardctl_darwin_arm64.tar.gz`: native macOS Apple Silicon CLI.
-- `checksums.txt`: SHA256 checksums for host CLI archives.
+- `SHA256SUMS.txt`: SHA256 checksums for all release assets.
 
-After downloading the host CLI artifact, extract it and run:
+Developers can build the host CLI from source:
 
 ```sh
-agent-debugboardctl --help
+go build -o agent-debugboardctl ./cmd/agent-debugboardctl
+./agent-debugboardctl --help
 ```
 
 ## Host Usage

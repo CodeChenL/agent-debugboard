@@ -16,7 +16,7 @@ jobs:
 
     steps:
       - name: Checkout application
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           path: app
 
@@ -41,7 +41,7 @@ jobs:
           cp build/agent_debugboard/zephyr/zephyr.map dist/firmware/agent-debugboard-rp2040.map
 
       - name: Upload firmware artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: agent-debugboard-rp2040-firmware
           path: dist/firmware/
@@ -53,12 +53,12 @@ jobs:
 
     steps:
       - name: Checkout application
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version: "1.25.x"
           cache: true
@@ -70,16 +70,17 @@ jobs:
         run: |
           go build -trimpath -o /tmp/agent-debugboardctl ./cmd/agent-debugboardctl
           /tmp/agent-debugboardctl --help
+          /tmp/agent-debugboardctl --version
 
       - name: Build host CLI release archives
-        uses: goreleaser/goreleaser-action@v6
+        uses: goreleaser/goreleaser-action@v7
         with:
           distribution: goreleaser
           version: "~> v2"
           args: release --snapshot --clean
 
       - name: Upload host CLI artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: agent-debugboardctl-native-packages
           path: |

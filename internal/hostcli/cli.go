@@ -23,6 +23,8 @@ const (
 
 var ansiRE = regexp.MustCompile(`\x1b\[[0-9;]*m`)
 
+var Version = "dev"
+
 type App struct {
 	FindPort func() (string, error)
 	Transact func(port string, command string, timeout time.Duration) (string, error)
@@ -65,14 +67,16 @@ func (a App) Run(args []string, stdout io.Writer, stderr io.Writer) int {
 	timeout := &durationFlag{value: 2 * time.Second}
 	var portName string
 	var raw bool
+	var showVersion bool
 
 	fs := flag.NewFlagSet("agent-debugboardctl", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	fs.StringVar(&portName, "port", "", "serial port, for example /dev/cu.usbmodemXXXX")
 	fs.Var(timeout, "timeout", "command timeout, for example 2s or 0.5")
 	fs.BoolVar(&raw, "raw", false, "send args as a raw shell command")
+	fs.BoolVar(&showVersion, "version", false, "print version and exit")
 	fs.Usage = func() {
-		fmt.Fprintf(stderr, "usage: agent-debugboardctl [--port PORT] [--timeout 2s] [--raw] <command> [args...]\n\n")
+		fmt.Fprintf(stderr, "usage: agent-debugboardctl [--port PORT] [--timeout 2s] [--raw] [--version] <command> [args...]\n\n")
 		fmt.Fprintf(stderr, "examples:\n")
 		fmt.Fprintf(stderr, "  agent-debugboardctl status\n")
 		fmt.Fprintf(stderr, "  agent-debugboardctl rail set 12v_out on\n")
@@ -85,6 +89,11 @@ func (a App) Run(args []string, stdout io.Writer, stderr io.Writer) int {
 			return 0
 		}
 		return 2
+	}
+
+	if showVersion {
+		fmt.Fprintf(stdout, "agent-debugboardctl %s\n", Version)
+		return 0
 	}
 
 	commandArgs := fs.Args()
