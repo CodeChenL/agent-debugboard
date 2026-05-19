@@ -22,7 +22,7 @@ Agent 直接调用。
 | 模块 | 当前固件支持 |
 | --- | --- |
 | USB 控制 | CDC ACM shell，提供 `debugboard` 命令 |
-| 主机自动化 | `agent-debugboardctl` CLI |
+| 主机自动化 | 支持 JSON 输出和 `doctor` 诊断的 `agent-debugboardctl` CLI |
 | 电源轨 | `12v_out`、`5v_out`、`5v_ws`、`20v_out` |
 | ADC 监测 | 读取 `5v_out`、`12v_out`、`20v_out` 的电流监测通道 |
 | TF/SD 路由 | 在 `target` 和 `usb-reader` 之间切换 |
@@ -30,6 +30,25 @@ Agent 直接调用。
 | 固件更新 | 通过 USB 命令让 RP2040 进入 BOOTSEL |
 
 `5V_FIN` 会被当作独立的输入/来源电源轨处理，不作为可控输出电源轨暴露给主机。
+
+## 给 AI Agent 的使用入口
+
+AI Agent 在操作硬件前，应先读取
+[skills/agent-debugboard/SKILL.md](skills/agent-debugboard/SKILL.md)。这份 skill
+是仓库内面向 Agent 的权威操作规程，包含 `agent-debugboardctl` 的安装、连接诊
+断、JSON 命令使用和有副作用操作的安全规则。
+
+推荐 Agent 最小流程：
+
+```sh
+agent-debugboardctl --version
+agent-debugboardctl --json doctor
+agent-debugboardctl --json status
+```
+
+如果 `agent-debugboardctl` 未安装，先按 skill 中的安装命令处理。自动化场景
+优先使用 `agent-debugboardctl --json ...`，解析 `schema`、`ok`、`command` 和
+`error.code`，不要解析面向人看的文本输出。
 
 ## 安装主机侧 CLI
 
@@ -103,6 +122,7 @@ xattr -dr com.apple.quarantine ./agent-debugboardctl
 ```sh
 agent-debugboardctl --help
 agent-debugboardctl --version
+agent-debugboardctl doctor
 ```
 
 ## 构建固件
@@ -181,6 +201,19 @@ go build -o agent-debugboardctl ./cmd/agent-debugboardctl
 
 ```sh
 agent-debugboardctl status
+agent-debugboardctl doctor
+```
+
+Agent 或自动化程序推荐优先使用 JSON 输出。JSON 响应固定包含
+`schema: "agent-debugboard.v1"`、`ok`、`command`，成功时返回命令相关字段，
+失败时返回 `error: {code, message}`：
+
+```sh
+agent-debugboardctl --json doctor
+agent-debugboardctl --json status
+agent-debugboardctl --json rail list
+agent-debugboardctl --json adc read
+agent-debugboardctl --json gpio list
 ```
 
 控制电源轨：
@@ -224,10 +257,15 @@ agent-debugboardctl gpio input GP13
 
 ```text
 debugboard status
+debugboard status --json
 debugboard rail list
+debugboard rail list --json
 debugboard adc read
+debugboard adc read --json
 debugboard sd get
+debugboard sd get --json
 debugboard gpio list
+debugboard gpio list --json
 debugboard bootloader
 ```
 
@@ -269,6 +307,7 @@ apps/agent_debugboard/tests/  单元测试
 cmd/agent-debugboardctl/      Go 主机侧 CLI 入口
 internal/hostcli/             Go 主机侧 CLI 实现
 doc/                          硬件文档和宣传素材
+skills/agent-debugboard/      面向 Agent 的 skill 和操作规程
 .goreleaser.yaml              GoReleaser 主机侧 CLI 打包配置
 go.mod, go.sum                主机侧 CLI Go module
 west.yml                      Zephyr workspace manifest

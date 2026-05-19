@@ -23,7 +23,7 @@ schematic copy, and project documentation.
 | Area | Supported in this firmware |
 | --- | --- |
 | USB control | CDC ACM shell with `debugboard` commands |
-| Host automation | `agent-debugboardctl` CLI |
+| Host automation | `agent-debugboardctl` CLI with JSON output and `doctor` diagnostics |
 | Power rails | `12v_out`, `5v_out`, `5v_ws`, `20v_out` |
 | ADC monitor | Current monitor reads for `5v_out`, `12v_out`, `20v_out` |
 | TF/SD routing | Switch route between `target` and `usb-reader` |
@@ -32,6 +32,25 @@ schematic copy, and project documentation.
 
 `5V_FIN` is intentionally treated as a separate input/source rail. It is not
 exposed as a controllable output rail.
+
+## For AI Agents
+
+AI agents should read [skills/agent-debugboard/SKILL.md](skills/agent-debugboard/SKILL.md)
+before operating hardware through this project. The skill is the canonical
+Agent-facing procedure for installing `agent-debugboardctl`, diagnosing the
+board connection, and using JSON commands safely.
+
+Recommended agent flow:
+
+```sh
+agent-debugboardctl --version
+agent-debugboardctl --json doctor
+agent-debugboardctl --json status
+```
+
+If `agent-debugboardctl` is not installed, follow the install commands in the
+skill first. For automation, prefer `agent-debugboardctl --json ...`; parse
+`schema`, `ok`, `command`, and `error.code` instead of human-readable text.
 
 ## Install Host CLI
 
@@ -108,6 +127,7 @@ After installation:
 ```sh
 agent-debugboardctl --help
 agent-debugboardctl --version
+agent-debugboardctl doctor
 ```
 
 ## Build Firmware
@@ -187,6 +207,19 @@ Query board status:
 
 ```sh
 agent-debugboardctl status
+agent-debugboardctl doctor
+```
+
+Agent or automation code should prefer JSON output. JSON responses use
+`schema: "agent-debugboard.v1"`, `ok`, `command`, and either command-specific
+fields or `error: {code, message}`:
+
+```sh
+agent-debugboardctl --json doctor
+agent-debugboardctl --json status
+agent-debugboardctl --json rail list
+agent-debugboardctl --json adc read
+agent-debugboardctl --json gpio list
 ```
 
 Control rails:
@@ -230,10 +263,15 @@ Open the CDC serial device and use the `debugboard` shell command:
 
 ```text
 debugboard status
+debugboard status --json
 debugboard rail list
+debugboard rail list --json
 debugboard adc read
+debugboard adc read --json
 debugboard sd get
+debugboard sd get --json
 debugboard gpio list
+debugboard gpio list --json
 debugboard bootloader
 ```
 
@@ -275,6 +313,7 @@ apps/agent_debugboard/tests/  Unit tests
 cmd/agent-debugboardctl/      Go host CLI entrypoint
 internal/hostcli/             Go host CLI implementation
 doc/                          Hardware documents and marketing assets
+skills/agent-debugboard/      Agent-facing skill and operating guide
 .goreleaser.yaml              GoReleaser host CLI packaging config
 go.mod, go.sum                Go module for host CLI
 west.yml                      Zephyr workspace manifest

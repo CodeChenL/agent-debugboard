@@ -2,6 +2,7 @@ package hostcli
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"strings"
 	"testing"
@@ -76,6 +77,111 @@ func TestRunRawCommandAndTimeout(t *testing.T) {
 	}
 }
 
+func TestRunJSONCommandRequestsAndValidatesFirmwareJSON(t *testing.T) {
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	var gotCommand string
+
+	response := `{"schema":"agent-debugboard.v1","ok":true,"command":"status","project":"agent-debugboard"}`
+	app := App{
+		FindPort: func() (string, error) {
+			return "/dev/cu.debugboard", nil
+		},
+		Transact: func(port string, command string, timeout time.Duration) (string, error) {
+			gotCommand = command
+			return command + "\r\n" + response + "\r\n" + PromptText + " ", nil
+		},
+	}
+
+	code := app.Run([]string{"--json", "status"}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("Run() exit code = %d stderr=%q stdout=%q", code, stderr.String(), stdout.String())
+	}
+	if gotCommand != "debugboard status --json" {
+		t.Fatalf("command = %q", gotCommand)
+	}
+	if strings.TrimSpace(stdout.String()) != response {
+		t.Fatalf("stdout = %q", stdout.String())
+	}
+}
+
+func TestRunJSONCommandReturnsFailureOnBoardError(t *testing.T) {
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	response := `{"schema":"agent-debugboard.v1","ok":false,"command":"rail","error":{"code":"unknown_rail","message":"unknown rail"}}`
+	app := App{
+		FindPort: func() (string, error) {
+			return "/dev/cu.debugboard", nil
+		},
+		Transact: func(port string, command string, timeout time.Duration) (string, error) {
+			return command + "\r\n" + response + "\r\n" + PromptText + " ", nil
+		},
+	}
+
+	code := app.Run([]string{"--json", "rail", "get", "missing"}, &stdout, &stderr)
+	if code != 1 {
+		t.Fatalf("Run() exit code = %d stdout=%q stderr=%q", code, stdout.String(), stderr.String())
+	}
+	if strings.TrimSpace(stdout.String()) != response {
+		t.Fatalf("stdout = %q", stdout.String())
+	}
+}
+
+func TestRunJSONRejectsOldTextFirmwareOutput(t *testing.T) {
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	app := App{
+		FindPort: func() (string, error) {
+			return "/dev/cu.debugboard", nil
+		},
+		Transact: func(port string, command string, timeout time.Duration) (string, error) {
+			return command + "\r\nproject=agent-debugboard\r\n" + PromptText + " ", nil
+		},
+	}
+
+	code := app.Run([]string{"--json", "status"}, &stdout, &stderr)
+	if code != 1 {
+		t.Fatalf("Run() exit code = %d stdout=%q stderr=%q", code, stdout.String(), stderr.String())
+	}
+
+	var got jsonResponse
+	if err := json.Unmarshal(stdout.Bytes(), &got); err != nil {
+		t.Fatalf("stdout is not JSON: %v stdout=%q", err, stdout.String())
+	}
+	if got.OK || got.Command != "status" || got.Error == nil || got.Error.Code != "invalid_json" {
+		t.Fatalf("json error = %#v", got)
+	}
+}
+
+func TestRunRawJSONDoesNotAppendFirmwareJSONFlag(t *testing.T) {
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	var gotCommand string
+
+	app := App{
+		FindPort: func() (string, error) {
+			return "/dev/cu.debugboard", nil
+		},
+		Transact: func(port string, command string, timeout time.Duration) (string, error) {
+			gotCommand = command
+			return command + "\r\n{\"raw\":true}\r\n" + PromptText + " ", nil
+		},
+	}
+
+	code := app.Run([]string{"--raw", "--json", "version"}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("Run() exit code = %d stdout=%q stderr=%q", code, stdout.String(), stderr.String())
+	}
+	if gotCommand != "version" {
+		t.Fatalf("command = %q", gotCommand)
+	}
+	if strings.TrimSpace(stdout.String()) != `{"raw":true}` {
+		t.Fatalf("stdout = %q", stdout.String())
+	}
+}
+
 func TestRunReportsFindPortError(t *testing.T) {
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
@@ -144,6 +250,106 @@ func TestRunVersionReturnsSuccessWithoutBoardAccess(t *testing.T) {
 	}
 	if strings.TrimSpace(stdout.String()) != "agent-debugboardctl "+Version {
 		t.Fatalf("stdout = %q", stdout.String())
+	}
+}
+
+func TestRunJSONVersionReturnsSuccessWithoutBoardAccess(t *testing.T) {
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	app := App{
+		FindPort: func() (string, error) {
+			t.Fatal("FindPort should not be called for --version")
+			return "", nil
+		},
+		Transact: func(port string, command string, timeout time.Duration) (string, error) {
+			t.Fatal("Transact should not be called for --version")
+			return "", nil
+		},
+	}
+
+	code := app.Run([]string{"--json", "--version"}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("Run() exit code = %d stderr=%q", code, stderr.String())
+	}
+
+	var got map[string]any
+	if err := json.Unmarshal(stdout.Bytes(), &got); err != nil {
+		t.Fatalf("stdout is not JSON: %v stdout=%q", err, stdout.String())
+	}
+	if got["schema"] != JSONSchema || got["command"] != "version" || got["version"] != Version {
+		t.Fatalf("stdout JSON = %#v", got)
+	}
+}
+
+func TestDoctorJSONReportsMissingBoard(t *testing.T) {
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	app := App{
+		ListPorts: func() ([]string, error) {
+			return []string{"/dev/ttyS0", "/dev/ttyACM0"}, nil
+		},
+		ProbePort: func(portName string) bool {
+			return false
+		},
+		Transact: func(port string, command string, timeout time.Duration) (string, error) {
+			t.Fatal("Transact should not be called without a probed board")
+			return "", nil
+		},
+	}
+
+	code := app.Run([]string{"--json", "doctor"}, &stdout, &stderr)
+	if code != 1 {
+		t.Fatalf("Run() exit code = %d stdout=%q stderr=%q", code, stdout.String(), stderr.String())
+	}
+
+	var got doctorResult
+	if err := json.Unmarshal(stdout.Bytes(), &got); err != nil {
+		t.Fatalf("stdout is not JSON: %v stdout=%q", err, stdout.String())
+	}
+	if got.OK || got.Command != "doctor" || got.Error == nil || got.Error.Code != "port_not_found" {
+		t.Fatalf("doctor JSON = %#v", got)
+	}
+	if strings.Join(got.Candidates, ",") != "/dev/ttyACM0" {
+		t.Fatalf("candidates = %#v", got.Candidates)
+	}
+}
+
+func TestDoctorJSONReportsBoardStatus(t *testing.T) {
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	status := `{"schema":"agent-debugboard.v1","ok":true,"command":"status","project":"agent-debugboard"}`
+	app := App{
+		ListPorts: func() ([]string, error) {
+			return []string{"/dev/ttyS0", "/dev/cu.usbmodem21201"}, nil
+		},
+		ProbePort: func(portName string) bool {
+			return portName == "/dev/cu.usbmodem21201"
+		},
+		Transact: func(port string, command string, timeout time.Duration) (string, error) {
+			if port != "/dev/cu.usbmodem21201" || command != "debugboard status --json" {
+				t.Fatalf("port=%q command=%q", port, command)
+			}
+			return command + "\r\n" + status + "\r\n" + PromptText + " ", nil
+		},
+	}
+
+	code := app.Run([]string{"--json", "doctor"}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("Run() exit code = %d stdout=%q stderr=%q", code, stdout.String(), stderr.String())
+	}
+
+	var got doctorResult
+	if err := json.Unmarshal(stdout.Bytes(), &got); err != nil {
+		t.Fatalf("stdout is not JSON: %v stdout=%q", err, stdout.String())
+	}
+	if !got.OK || got.SelectedPort != "/dev/cu.usbmodem21201" || !got.ProbeOK {
+		t.Fatalf("doctor JSON = %#v", got)
+	}
+	if strings.TrimSpace(string(got.Status)) != status {
+		t.Fatalf("status = %s", got.Status)
 	}
 }
 

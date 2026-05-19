@@ -4,6 +4,9 @@ This directory contains the Zephyr application for `agent-debugboard`. The root
 [README.md](../../README.md) contains workspace setup, flashing, and usage
 instructions.
 
+Agent/AI operators should read the repository skill first:
+[skills/agent-debugboard/SKILL.md](../../skills/agent-debugboard/SKILL.md).
+
 Build:
 
 ```sh
@@ -29,7 +32,9 @@ Useful commands:
 
 ```text
 debugboard status
+debugboard status --json
 debugboard rail list
+debugboard rail list --json
 debugboard rail set 12v_out on
 debugboard rail set 12v_out off
 debugboard rail set 5v_out on
@@ -39,11 +44,14 @@ debugboard rail set 5v_ws off
 debugboard rail set 20v_out on
 debugboard rail set 20v_out off
 debugboard adc read
+debugboard adc read --json
 debugboard adc read 5v_out
 debugboard sd get
+debugboard sd get --json
 debugboard sd route target
 debugboard sd route usb-reader
 debugboard gpio list
+debugboard gpio list --json
 debugboard gpio set GP13 1
 debugboard gpio input GP13
 debugboard bootloader
@@ -59,6 +67,8 @@ Host helper:
 
 ```sh
 ./agent-debugboardctl status
+./agent-debugboardctl doctor
+./agent-debugboardctl --json status
 ./agent-debugboardctl adc read
 ./agent-debugboardctl rail set 12v_out on
 ./agent-debugboardctl rail set 20v_out on
