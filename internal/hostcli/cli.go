@@ -81,6 +81,9 @@ func (a App) Run(args []string, stdout io.Writer, stderr io.Writer) int {
 	}
 
 	if err := fs.Parse(args); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			return 0
+		}
 		return 2
 	}
 

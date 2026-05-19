@@ -99,6 +99,30 @@ func TestRunReportsFindPortError(t *testing.T) {
 	}
 }
 
+func TestRunHelpReturnsSuccess(t *testing.T) {
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	app := App{
+		FindPort: func() (string, error) {
+			t.Fatal("FindPort should not be called for --help")
+			return "", nil
+		},
+		Transact: func(port string, command string, timeout time.Duration) (string, error) {
+			t.Fatal("Transact should not be called for --help")
+			return "", nil
+		},
+	}
+
+	code := app.Run([]string{"--help"}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("Run() exit code = %d stderr=%q", code, stderr.String())
+	}
+	if !strings.Contains(stderr.String(), "usage: agent-debugboardctl") {
+		t.Fatalf("stderr = %q", stderr.String())
+	}
+}
+
 func TestCandidatePortsFiltersCommonUSBSerialNames(t *testing.T) {
 	got := CandidatePorts([]string{
 		"/dev/ttyS0",
