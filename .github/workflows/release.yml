@@ -69,10 +69,10 @@ jobs:
       - name: Build firmware
         run: |
           west build -p always -b rpi_pico/rp2040 app/apps/agent_debugboard -d build/agent_debugboard
-          mkdir -p app/dist/release
-          cp build/agent_debugboard/zephyr/zephyr.uf2 app/dist/release/agent-debugboard-rp2040.uf2
-          cp build/agent_debugboard/zephyr/zephyr.elf app/dist/release/agent-debugboard-rp2040.elf
-          cp build/agent_debugboard/zephyr/zephyr.map app/dist/release/agent-debugboard-rp2040.map
+          mkdir -p release-assets
+          cp build/agent_debugboard/zephyr/zephyr.uf2 release-assets/agent-debugboard-rp2040.uf2
+          cp build/agent_debugboard/zephyr/zephyr.elf release-assets/agent-debugboard-rp2040.elf
+          cp build/agent_debugboard/zephyr/zephyr.map release-assets/agent-debugboard-rp2040.map
 
       - name: Build host CLI release archives
         uses: goreleaser/goreleaser-action@v7
@@ -85,6 +85,8 @@ jobs:
       - name: Prepare release assets
         working-directory: app
         run: |
+          mkdir -p dist/release
+          cp ../release-assets/agent-debugboard-rp2040.* dist/release/
           cp dist/*.tar.gz dist/release/
           cp dist/*.zip dist/release/
           cd dist/release
