@@ -1,0 +1,89 @@
+name: Build
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  firmware:
+    name: Build RP2040 UF2 firmware
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout application
+        uses: actions/checkout@v4
+        with:
+          path: app
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Set up Zephyr workspace
+        uses: zephyrproject-rtos/action-zephyr-setup@v1
+        with:
+          app-path: app
+          toolchains: arm-zephyr-eabi
+          sdk-version: "1.0.1"
+
+      - name: Build firmware
+        run: |
+          west build -p always -b rpi_pico/rp2040 app/apps/agent_debugboard -d build/agent_debugboard
+          mkdir -p dist/firmware
+          cp build/agent_debugboard/zephyr/zephyr.uf2 dist/firmware/agent-debugboard-rp2040.uf2
+          cp build/agent_debugboard/zephyr/zephyr.elf dist/firmware/agent-debugboard-rp2040.elf
+          cp build/agent_debugboard/zephyr/zephyr.map dist/firmware/agent-debugboard-rp2040.map
+
+      - name: Upload firmware artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: agent-debugboard-rp2040-firmware
+          path: dist/firmware/
+          if-no-files-found: error
+
+  host-cli:
+    name: Test and package Go host CLI
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout application
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.25.x"
+          cache: true
+
+      - name: Run unit tests
+        run: ./apps/agent_debugboard/tests/run_unit_tests.sh
+
+      - name: Smoke test local host CLI build
+        run: |
+          go build -trimpath -o /tmp/agent-debugboardctl ./cmd/agent-debugboardctl
+          /tmp/agent-debugboardctl --help
+
+      - name: Build host CLI release archives
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          distribution: goreleaser
+          version: "~> v2"
+          args: release --snapshot --clean
+
+      - name: Upload host CLI artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: agent-debugboardctl-native-packages
+          path: |
+            dist/*.tar.gz
+            dist/*.zip
+            dist/checksums.txt
+          if-no-files-found: error
