@@ -64,7 +64,7 @@ wget -qO- https://raw.githubusercontent.com/xzl01/agent-debugboard/main/scripts/
 也可以指定版本或安装目录：
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/xzl01/agent-debugboard/main/scripts/install.sh | VERSION=v0.0.2 sh
+curl -fsSL https://raw.githubusercontent.com/xzl01/agent-debugboard/main/scripts/install.sh | VERSION=<tag> sh
 curl -fsSL https://raw.githubusercontent.com/xzl01/agent-debugboard/main/scripts/install.sh | INSTALL_DIR=/usr/local/bin sh
 ```
 

@@ -10,6 +10,39 @@ permissions:
   contents: read
 
 jobs:
+  scripts:
+    name: Check install and helper scripts
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout application
+        uses: actions/checkout@v6
+
+      - name: Install ShellCheck
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y shellcheck
+
+      - name: Check shell scripts
+        run: |
+          shellcheck scripts/install.sh apps/agent_debugboard/tests/run_unit_tests.sh
+          sh -n scripts/install.sh
+          sh -n apps/agent_debugboard/tests/run_unit_tests.sh
+
+  windows-installer:
+    name: Check Windows installer
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout application
+        uses: actions/checkout@v6
+
+      - name: Check PowerShell installer
+        shell: pwsh
+        run: |
+          $null = [scriptblock]::Create((Get-Content .\scripts\install.ps1 -Raw))
+          .\scripts\install.ps1 -DryRun
+
   firmware:
     name: Build RP2040 UF2 firmware
     runs-on: ubuntu-latest
@@ -71,6 +104,7 @@ jobs:
           go build -trimpath -o /tmp/agent-debugboardctl ./cmd/agent-debugboardctl
           /tmp/agent-debugboardctl --help
           /tmp/agent-debugboardctl --version
+          /tmp/agent-debugboardctl --json --version
 
       - name: Build host CLI release archives
         uses: goreleaser/goreleaser-action@v7

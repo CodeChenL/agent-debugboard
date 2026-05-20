@@ -24,12 +24,12 @@ Use `agent-debugboardctl` for Agent-side hardware control. Prefer JSON output fo
 3. Treat these outcomes as follows:
    - Exit code `0` with `ok: true`: the CLI and board connection are ready.
    - Valid JSON with `ok: false`: read `error.code` and `error.message`; the CLI is installed but the board or serial path needs attention.
-   - Unknown `--json` or `doctor`: the installed CLI is too old. Install a newer release, or build from the current repository until the next release is published.
+   - Unknown `--json` or `doctor`: the installed CLI is too old. Install `agent-debugboardctl` v0.0.3 or newer.
    - Command not found: install the CLI.
 
 ## Install CLI
 
-Use the repository install scripts. They download the correct native binary, verify `SHA256SUMS.txt`, and install `agent-debugboardctl`.
+Use the repository install scripts. They download the correct native binary, verify `SHA256SUMS.txt`, and install `agent-debugboardctl`. The JSON and `doctor` workflow requires `agent-debugboardctl` v0.0.3 or newer.
 
 Public repository on macOS or Linux:
 
@@ -75,7 +75,7 @@ agent-debugboardctl --version
 agent-debugboardctl --json doctor
 ```
 
-If the release binary is older than this skill, build from the current checkout:
+If the installed CLI is older than v0.0.3, install the latest release or build from the current checkout:
 
 ```sh
 go build -trimpath -o agent-debugboardctl ./cmd/agent-debugboardctl

@@ -65,6 +65,7 @@ jobs:
           go build -trimpath -o /tmp/agent-debugboardctl ./cmd/agent-debugboardctl
           /tmp/agent-debugboardctl --help
           /tmp/agent-debugboardctl --version
+          /tmp/agent-debugboardctl --json --version
 
       - name: Build firmware
         run: |
@@ -114,8 +115,18 @@ jobs:
           RELEASE_TAG: ${{ steps.release.outputs.tag }}
         working-directory: app
         run: |
-          gh release create "$RELEASE_TAG" dist/release/* \
-            --repo "$GITHUB_REPOSITORY" \
-            --verify-tag \
-            --title "$RELEASE_TAG" \
-            --notes-file dist/release-notes.md
+          if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release edit "$RELEASE_TAG" \
+              --repo "$GITHUB_REPOSITORY" \
+              --title "$RELEASE_TAG" \
+              --notes-file dist/release-notes.md
+            gh release upload "$RELEASE_TAG" dist/release/* \
+              --repo "$GITHUB_REPOSITORY" \
+              --clobber
+          else
+            gh release create "$RELEASE_TAG" dist/release/* \
+              --repo "$GITHUB_REPOSITORY" \
+              --verify-tag \
+              --title "$RELEASE_TAG" \
+              --notes-file dist/release-notes.md
+          fi

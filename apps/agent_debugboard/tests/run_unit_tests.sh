@@ -3,7 +3,8 @@
 
 set -eu
 
-ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/../../.." && pwd)"
+SCRIPT_DIR="$(dirname -- "$0")"
+ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
 OUT="${ROOT}/build/agent_debugboard_unit"
 
 mkdir -p "${OUT}"

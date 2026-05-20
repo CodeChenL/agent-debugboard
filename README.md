@@ -68,7 +68,7 @@ wget -qO- https://raw.githubusercontent.com/xzl01/agent-debugboard/main/scripts/
 Install a specific version or choose a target directory:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/xzl01/agent-debugboard/main/scripts/install.sh | VERSION=v0.0.2 sh
+curl -fsSL https://raw.githubusercontent.com/xzl01/agent-debugboard/main/scripts/install.sh | VERSION=<tag> sh
 curl -fsSL https://raw.githubusercontent.com/xzl01/agent-debugboard/main/scripts/install.sh | INSTALL_DIR=/usr/local/bin sh
 ```
 

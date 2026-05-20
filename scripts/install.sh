@@ -11,7 +11,7 @@ usage() {
 Usage: install.sh [--version VERSION] [--install-dir DIR] [--repo OWNER/REPO] [--dry-run]
 
 Environment:
-  VERSION      Release tag to install, for example v0.0.2. Default: latest.
+  VERSION      Release tag to install, for example v0.0.4. Default: latest.
   INSTALL_DIR Directory to install agent-debugboardctl into.
   REPO         GitHub repository. Default: xzl01/agent-debugboard.
   GH_TOKEN     Token for private repository release downloads.
