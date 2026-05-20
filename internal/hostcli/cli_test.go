@@ -105,6 +105,90 @@ func TestRunJSONCommandRequestsAndValidatesFirmwareJSON(t *testing.T) {
 	}
 }
 
+func TestRunVerboseCommandRequestsFirmwareVerbose(t *testing.T) {
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	var gotCommand string
+
+	response := `5v_out signal=S_C_5V raw=22 mv=17 ma_est=540`
+	app := App{
+		FindPort: func() (string, error) {
+			return "/dev/cu.debugboard", nil
+		},
+		Transact: func(port string, command string, timeout time.Duration) (string, error) {
+			gotCommand = command
+			return command + "\r\n" + response + "\r\n" + PromptText + " ", nil
+		},
+	}
+
+	code := app.Run([]string{"-v", "adc", "read", "5v_out"}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("Run() exit code = %d stderr=%q stdout=%q", code, stderr.String(), stdout.String())
+	}
+	if gotCommand != "debugboard adc read 5v_out -v" {
+		t.Fatalf("command = %q", gotCommand)
+	}
+	if strings.TrimSpace(stdout.String()) != response {
+		t.Fatalf("stdout = %q", stdout.String())
+	}
+}
+
+func TestRunVerboseCommandPassesThroughCommandFlag(t *testing.T) {
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	var gotCommand string
+
+	response := `5v_out signal=S_C_5V raw=22 mv=17 ma_est=540`
+	app := App{
+		FindPort: func() (string, error) {
+			return "/dev/cu.debugboard", nil
+		},
+		Transact: func(port string, command string, timeout time.Duration) (string, error) {
+			gotCommand = command
+			return command + "\r\n" + response + "\r\n" + PromptText + " ", nil
+		},
+	}
+
+	code := app.Run([]string{"adc", "read", "-v", "5v_out"}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("Run() exit code = %d stderr=%q stdout=%q", code, stderr.String(), stdout.String())
+	}
+	if gotCommand != "debugboard adc read -v 5v_out" {
+		t.Fatalf("command = %q", gotCommand)
+	}
+	if strings.TrimSpace(stdout.String()) != response {
+		t.Fatalf("stdout = %q", stdout.String())
+	}
+}
+
+func TestRunJSONCommandIgnoresGlobalVerbose(t *testing.T) {
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	var gotCommand string
+
+	response := `{"schema":"agent-debugboard.v1","ok":true,"command":"adc","readings":[{"name":"5v_out","ma_est":540}]}`
+	app := App{
+		FindPort: func() (string, error) {
+			return "/dev/cu.debugboard", nil
+		},
+		Transact: func(port string, command string, timeout time.Duration) (string, error) {
+			gotCommand = command
+			return command + "\r\n" + response + "\r\n" + PromptText + " ", nil
+		},
+	}
+
+	code := app.Run([]string{"--json", "-v", "adc", "read", "5v_out"}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("Run() exit code = %d stderr=%q stdout=%q", code, stderr.String(), stdout.String())
+	}
+	if gotCommand != "debugboard adc read 5v_out --json" {
+		t.Fatalf("command = %q", gotCommand)
+	}
+	if strings.TrimSpace(stdout.String()) != response {
+		t.Fatalf("stdout = %q", stdout.String())
+	}
+}
+
 func TestRunJSONCommandReturnsFailureOnBoardError(t *testing.T) {
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer

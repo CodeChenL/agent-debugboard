@@ -51,7 +51,10 @@ struct adc_sample {
 	int32_t ma_est;
 };
 
+#define RAIL_STATE_CAPACITY 8
+
 static const struct device *const gpio0 = DEVICE_DT_GET(GPIO0_NODE);
+static bool rail_states[RAIL_STATE_CAPACITY];
 
 static const struct adc_dt_spec adc_channels[] = {
 	DT_FOREACH_PROP_ELEM(ADC_INPUTS_NODE, io_channels, ADC_SPEC_AND_COMMA)
@@ -72,9 +75,51 @@ static size_t effective_argc(size_t argc, char **argv)
 	return json_requested(argc, argv) ? argc - 1 : argc;
 }
 
+static bool verbose_requested_arg(const char *arg)
+{
+	return streq(arg, "-v") || streq(arg, "--verbose");
+}
+
 static const char *json_bool(bool value)
 {
 	return value ? "true" : "false";
+}
+
+static size_t rail_index(const struct debugboard_rail_desc *rail)
+{
+	return (size_t)(rail - debugboard_rails);
+}
+
+static bool rail_output_enabled(const struct debugboard_rail_desc *rail)
+{
+	size_t index;
+
+	if (rail == NULL || !rail->controllable) {
+		return false;
+	}
+
+	index = rail_index(rail);
+	if (index >= debugboard_rail_count || index >= ARRAY_SIZE(rail_states)) {
+		return false;
+	}
+
+	return rail_states[index];
+}
+
+static void set_rail_output_state(const struct debugboard_rail_desc *rail, bool enabled)
+{
+	size_t index;
+
+	if (rail == NULL || !rail->controllable) {
+		return;
+	}
+
+	index = rail_index(rail);
+	if (index >= debugboard_rail_count || index >= ARRAY_SIZE(rail_states)) {
+		return;
+	}
+
+	rail_states[index] = enabled;
 }
 
 static const char *sd_route_name(void)
@@ -144,7 +189,7 @@ static int json_error(const struct shell *sh, const char *command, const char *c
 static void json_print_rail_object(const struct shell *sh,
 				   const struct debugboard_rail_desc *rail)
 {
-	int value = rail->controllable ? gpio_pin_get(gpio0, rail->pin) : 0;
+	bool enabled = rail_output_enabled(rail);
 
 	shell_fprintf(sh, SHELL_NORMAL, "{\"name\":");
 	json_string(sh, rail->name);
@@ -158,14 +203,9 @@ static void json_print_rail_object(const struct shell *sh,
 		return;
 	}
 
-	if (value < 0) {
-		shell_fprintf(sh, SHELL_NORMAL, ",\"state\":\"unknown\",\"value\":null}");
-		return;
-	}
-
 	shell_fprintf(sh, SHELL_NORMAL, ",\"state\":");
-	json_string(sh, value > 0 ? "on" : "off");
-	shell_fprintf(sh, SHELL_NORMAL, ",\"value\":%d}", value > 0 ? 1 : 0);
+	json_string(sh, enabled ? "on" : "off");
+	shell_fprintf(sh, SHELL_NORMAL, ",\"value\":%d}", enabled ? 1 : 0);
 }
 
 static void json_print_rails(const struct shell *sh)
@@ -193,8 +233,31 @@ static void json_print_current_channel(const struct shell *sh,
 	json_string(sh, current->name);
 	shell_fprintf(sh, SHELL_NORMAL, ",\"signal\":");
 	json_string(sh, current->signal);
-	shell_fprintf(sh, SHELL_NORMAL, ",\"adc_index\":%u,\"ma_per_mv\":%" PRId32 "}",
+	shell_fprintf(sh, SHELL_NORMAL, ",\"adc_index\":%u,\"ma_per_mv\":%" PRId32,
 		      (unsigned int)current->adc_index, current->ma_per_mv);
+	shell_fprintf(sh, SHELL_NORMAL, ",\"sensor\":");
+	json_string(sh, current->sensor);
+	shell_fprintf(sh, SHELL_NORMAL,
+		      ",\"shunt_uohm\":%" PRIu32 ",\"load_ohm\":%" PRIu32
+		      ",\"gm_ua_per_v\":%" PRIu32 ",\"offset_mv\":%" PRId32,
+		      current->shunt_uohm, current->load_ohm, current->gm_ua_per_v,
+		      current->offset_mv);
+	if (current->cal_points != NULL && current->cal_point_count > 0) {
+		shell_fprintf(sh, SHELL_NORMAL, ",\"calibration\":\"piecewise_linear\","
+			      "\"calibration_points\":[");
+		for (size_t i = 0; i < current->cal_point_count; i++) {
+			if (i > 0) {
+				shell_fprintf(sh, SHELL_NORMAL, ",");
+			}
+			shell_fprintf(sh, SHELL_NORMAL, "{\"mv\":%" PRId32
+				      ",\"ma\":%" PRId32 "}",
+				      current->cal_points[i].mv, current->cal_points[i].ma);
+		}
+		shell_fprintf(sh, SHELL_NORMAL, "]");
+	} else {
+		shell_fprintf(sh, SHELL_NORMAL, ",\"calibration\":\"linear\"");
+	}
+	shell_fprintf(sh, SHELL_NORMAL, "}");
 }
 
 static void json_print_adc_channels(const struct shell *sh)
@@ -294,6 +357,7 @@ static int configure_rail_defaults(void)
 		if (ret < 0) {
 			return ret;
 		}
+		set_rail_output_state(&debugboard_rails[i], false);
 	}
 
 	return 0;
@@ -331,6 +395,7 @@ static int read_current(const struct debugboard_current_desc *current, struct ad
 		.buffer = &buf,
 		.buffer_size = sizeof(buf),
 	};
+	const struct debugboard_rail_desc *rail;
 	const struct adc_dt_spec *spec;
 
 	if (current->adc_index >= ARRAY_SIZE(adc_channels)) {
@@ -358,19 +423,22 @@ static int read_current(const struct debugboard_current_desc *current, struct ad
 	}
 
 	sample->mv = mv;
-	sample->ma_est = debugboard_estimate_current_ma(mv, current->ma_per_mv);
+	sample->ma_est = debugboard_estimate_current_ma(mv, current);
+	rail = debugboard_find_rail(current->name);
+	if (rail != NULL && rail->controllable && !rail_output_enabled(rail)) {
+		sample->ma_est = 0;
+	}
 
 	return 0;
 }
 
 static void print_rail(const struct shell *sh, const struct debugboard_rail_desc *rail)
 {
-	int value = rail->controllable ? gpio_pin_get(gpio0, rail->pin) : 0;
-
 	shell_print(sh, "%s signal=%s gp=%u controllable=%s state=%s",
 		    rail->name, rail->signal, (unsigned int)rail->pin,
 		    rail->controllable ? "yes" : "no",
-		    rail->controllable ? (value > 0 ? "on" : "off") : "locked");
+		    rail->controllable ? (rail_output_enabled(rail) ? "on" : "off") :
+					 "locked");
 }
 
 static int cmd_status(const struct shell *sh, size_t argc, char **argv)
@@ -505,6 +573,7 @@ static int cmd_rail(const struct shell *sh, size_t argc, char **argv)
 		shell_error(sh, "failed to set %s: %d", rail->name, ret);
 		return ret;
 	}
+	set_rail_output_state(rail, value);
 
 	if (want_json) {
 		json_begin(sh, "rail", true);
@@ -521,21 +590,41 @@ static int cmd_rail(const struct shell *sh, size_t argc, char **argv)
 static int cmd_adc(const struct shell *sh, size_t argc, char **argv)
 {
 	const struct debugboard_current_desc *current;
+	const char *channel_name = NULL;
+	const char *usage = "usage: debugboard adc read [-v|--verbose] "
+			    "[5v_out|12v_out|20v_out]";
 	struct adc_sample sample;
 	struct adc_sample samples[ARRAY_SIZE(adc_channels)];
 	bool want_json = json_requested(argc, argv);
+	bool verbose = false;
 	size_t eff_argc = effective_argc(argc, argv);
 	int ret;
 
 	if (eff_argc < 2 || streq(argv[1], "read")) {
-		if (eff_argc >= 3) {
-			current = debugboard_find_current(argv[2]);
+		for (size_t i = 2; i < eff_argc; i++) {
+			if (verbose_requested_arg(argv[i])) {
+				verbose = true;
+				continue;
+			}
+			if (channel_name == NULL) {
+				channel_name = argv[i];
+				continue;
+			}
+			if (want_json) {
+				return json_error(sh, "adc", "usage", usage, -EINVAL);
+			}
+			shell_error(sh, "%s", usage);
+			return -EINVAL;
+		}
+
+		if (channel_name != NULL) {
+			current = debugboard_find_current(channel_name);
 			if (current == NULL) {
 				if (want_json) {
 					return json_error(sh, "adc", "unknown_channel",
 							  "unknown adc channel", -ENOENT);
 				}
-				shell_error(sh, "unknown adc channel: %s", argv[2]);
+				shell_error(sh, "unknown adc channel: %s", channel_name);
 				return -ENOENT;
 			}
 
@@ -558,10 +647,15 @@ static int cmd_adc(const struct shell *sh, size_t argc, char **argv)
 				return 0;
 			}
 
-			shell_print(sh, "%s signal=%s raw=%" PRId32 " mv=%" PRId32
-				    " ma_est=%" PRId32,
-				    current->name, current->signal, sample.raw, sample.mv,
-				    sample.ma_est);
+			if (verbose) {
+				shell_print(sh, "%s signal=%s raw=%" PRId32 " mv=%" PRId32
+					    " ma_est=%" PRId32,
+					    current->name, current->signal, sample.raw, sample.mv,
+					    sample.ma_est);
+			} else {
+				shell_print(sh, "%s=%" PRId32 "mA", current->name,
+					    sample.ma_est);
+			}
 			return 0;
 		}
 
@@ -592,21 +686,25 @@ static int cmd_adc(const struct shell *sh, size_t argc, char **argv)
 		}
 
 		for (size_t i = 0; i < debugboard_current_count; i++) {
-			shell_print(sh, "%s signal=%s raw=%" PRId32 " mv=%" PRId32
-				    " ma_est=%" PRId32,
-				    debugboard_currents[i].name, debugboard_currents[i].signal,
-				    samples[i].raw, samples[i].mv, samples[i].ma_est);
+			if (verbose) {
+				shell_print(sh, "%s signal=%s raw=%" PRId32 " mv=%" PRId32
+					    " ma_est=%" PRId32,
+					    debugboard_currents[i].name,
+					    debugboard_currents[i].signal, samples[i].raw,
+					    samples[i].mv, samples[i].ma_est);
+			} else {
+				shell_print(sh, "%s=%" PRId32 "mA",
+					    debugboard_currents[i].name, samples[i].ma_est);
+			}
 		}
 
 		return 0;
 	}
 
 	if (want_json) {
-		return json_error(sh, "adc", "usage",
-				  "usage: debugboard adc read [5v_out|12v_out|20v_out]",
-				  -EINVAL);
+		return json_error(sh, "adc", "usage", usage, -EINVAL);
 	}
-	shell_error(sh, "usage: debugboard adc read [5v_out|12v_out|20v_out]");
+	shell_error(sh, "%s", usage);
 	return -EINVAL;
 }
 

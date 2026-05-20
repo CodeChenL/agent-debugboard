@@ -117,6 +117,7 @@ func (a App) Run(args []string, stdout io.Writer, stderr io.Writer) int {
 	var raw bool
 	var showVersion bool
 	var jsonOutput bool
+	var verbose bool
 
 	fs := flag.NewFlagSet("agent-debugboardctl", flag.ContinueOnError)
 	fs.SetOutput(stderr)
@@ -124,15 +125,18 @@ func (a App) Run(args []string, stdout io.Writer, stderr io.Writer) int {
 	fs.Var(timeout, "timeout", "command timeout, for example 2s or 0.5")
 	fs.BoolVar(&raw, "raw", false, "send args as a raw shell command")
 	fs.BoolVar(&jsonOutput, "json", false, "request and validate JSON output")
+	fs.BoolVar(&verbose, "v", false, "request verbose human output")
+	fs.BoolVar(&verbose, "verbose", false, "request verbose human output")
 	fs.BoolVar(&showVersion, "version", false, "print version and exit")
 	fs.Usage = func() {
-		fmt.Fprintf(stderr, "usage: agent-debugboardctl [--port PORT] [--timeout 2s] [--raw] [--json] [--version] <command> [args...]\n\n")
+		fmt.Fprintf(stderr, "usage: agent-debugboardctl [--port PORT] [--timeout 2s] [--raw] [--json] [-v] [--version] <command> [args...]\n\n")
 		fmt.Fprintf(stderr, "examples:\n")
 		fmt.Fprintf(stderr, "  agent-debugboardctl status\n")
 		fmt.Fprintf(stderr, "  agent-debugboardctl --json status\n")
 		fmt.Fprintf(stderr, "  agent-debugboardctl doctor\n")
 		fmt.Fprintf(stderr, "  agent-debugboardctl rail set 12v_out on\n")
-		fmt.Fprintf(stderr, "  agent-debugboardctl adc read\n\n")
+		fmt.Fprintf(stderr, "  agent-debugboardctl adc read\n")
+		fmt.Fprintf(stderr, "  agent-debugboardctl adc read -v 5v_out\n\n")
 		fs.PrintDefaults()
 	}
 
@@ -182,6 +186,9 @@ func (a App) Run(args []string, stdout io.Writer, stderr io.Writer) int {
 	}
 
 	wireArgs := append([]string(nil), commandArgs...)
+	if verbose && !raw && !jsonOutput && !hasArg(wireArgs, "-v") && !hasArg(wireArgs, "--verbose") {
+		wireArgs = append(wireArgs, "-v")
+	}
 	if jsonOutput && !raw && !hasArg(wireArgs, "--json") {
 		wireArgs = append(wireArgs, "--json")
 	}

@@ -16,10 +16,22 @@ struct debugboard_rail_desc {
 	bool controllable;
 };
 
+struct debugboard_current_cal_point {
+	int32_t mv;
+	int32_t ma;
+};
+
 struct debugboard_current_desc {
 	const char *name;
 	const char *signal;
+	const char *sensor;
+	const struct debugboard_current_cal_point *cal_points;
+	size_t cal_point_count;
 	size_t adc_index;
+	uint32_t shunt_uohm;
+	uint32_t load_ohm;
+	uint32_t gm_ua_per_v;
+	int32_t offset_mv;
 	int32_t ma_per_mv;
 };
 
@@ -45,6 +57,7 @@ const struct debugboard_rail_desc *debugboard_find_rail(const char *name);
 const struct debugboard_current_desc *debugboard_find_current(const char *name);
 const struct debugboard_safe_gpio_desc *debugboard_find_safe_gpio_by_pin(uint8_t pin);
 
-int32_t debugboard_estimate_current_ma(int32_t millivolts, int32_t ma_per_mv);
+int32_t debugboard_estimate_current_ma(int32_t millivolts,
+				       const struct debugboard_current_desc *current);
 
 #endif /* AGENT_DEBUGBOARD_MODEL_H_ */

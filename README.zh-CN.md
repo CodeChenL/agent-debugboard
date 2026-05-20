@@ -232,9 +232,13 @@ agent-debugboardctl rail set 20v_out on
 ```sh
 agent-debugboardctl adc read
 agent-debugboardctl adc read 5v_out
+agent-debugboardctl adc read -v 5v_out
 agent-debugboardctl adc read 12v_out
 agent-debugboardctl adc read 20v_out
 ```
+
+人类可读 ADC 输出默认保持简洁，例如 `5v_out=540mA`。需要调试字段时使用
+`-v` / `--verbose`，会额外输出 `signal`、`raw`、`mv` 等信息。JSON 输出仍保留完整结构化数据。
 
 切换 TF/SD 路由：
 
@@ -261,6 +265,7 @@ debugboard status --json
 debugboard rail list
 debugboard rail list --json
 debugboard adc read
+debugboard adc read -v 5v_out
 debugboard adc read --json
 debugboard sd get
 debugboard sd get --json
@@ -281,6 +286,13 @@ debugboard bootloader
 | 5 V 电流监测 | `adc read 5v_out` | `S_C_5V` |
 | 12 V 电流监测 | `adc read 12v_out` | `S_C_12V` |
 | 20 V 电流监测 | `adc read 20v_out` | `S_C_20V` |
+
+电流监测通道使用 INA139、0.2 mOhm 采样电阻、100 kOhm 输出负载和
+1000 uA/V 跨导。理想换算到 RP2040 ADC 输入为 20 mV/A，因此
+`1 mV = 50 mA`，`20 mV = 1 A`。`5v_out` 已按本地 0.1 A 步进实测数据使用
+分段线性校准表，并将 `mv <= 11` 视为 0 mA；`12v_out` 和 `20v_out`
+在完成校准前仍使用理想模型。传感器传输函数参考公开的
+[TI INA139 规格书](https://www.ti.com/product/INA139)。
 
 当前原理图副本放在
 [doc/agent-debugboard-schematic.pdf](doc/agent-debugboard-schematic.pdf)。

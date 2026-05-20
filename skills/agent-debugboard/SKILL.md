@@ -124,6 +124,22 @@ agent-debugboardctl --json rail set 5v_ws on
 agent-debugboardctl --json rail set 20v_out on
 ```
 
+Restart a target board with its normal software reboot or reset interface first.
+Use rail power-cycling only as a hard-restart fallback when soft reboot/reset is
+unavailable, the target is unresponsive, or no reset line is exposed. Confirm
+the rail name first, then turn it off, wait briefly for discharge, and turn it
+back on:
+
+```sh
+agent-debugboardctl --json rail set 5v_out off
+sleep 2
+agent-debugboardctl --json rail set 5v_out on
+agent-debugboardctl --json rail get 5v_out
+```
+
+Use the rail that actually powers the target, for example `5v_out`, `12v_out`,
+or `20v_out`. Do not power-cycle unrelated rails.
+
 Read ADC current monitors:
 
 ```sh
@@ -132,6 +148,16 @@ agent-debugboardctl --json adc read 5v_out
 agent-debugboardctl --json adc read 12v_out
 agent-debugboardctl --json adc read 20v_out
 ```
+
+For manual calibration or hardware debugging, use verbose human-readable ADC
+output to inspect raw fields:
+
+```sh
+agent-debugboardctl adc read -v 5v_out
+```
+
+Do not parse this text in automation. Agents should use `--json adc read ...`
+and consume `readings[].ma_est`, `readings[].raw`, and `readings[].mv`.
 
 Switch TF/SD route:
 
@@ -161,6 +187,18 @@ agent-debugboardctl bootloader
 - Prefer `--json` for all non-interactive use.
 - Do not use `--raw` unless debugging the firmware shell protocol itself.
 - Treat `rail set`, `gpio set`, `gpio input`, `sd route`, and `bootloader` as side-effectful operations. Confirm the target and desired state before running them.
+- Prefer soft reboot/reset for target-board restarts. Treat rail power-cycling as a hard-restart fallback that is destructive to target runtime state. Confirm the exact rail and only cycle the rail powering the target.
 - `5V_FIN` is an input/source rail. Do not present it as a controllable output.
 - Only use allowlisted GPIOs reported by `agent-debugboardctl --json gpio list`.
 - Do not expose board-internal schematic codenames in user-facing output.
+
+## ADC Calibration Notes
+
+- `5v_out` uses a fixed piecewise-linear calibration table from local load
+  measurements. The table covers approximately `0A` through `4.3A`; readings at
+  and below the 5V zero point are reported as `0mA`.
+- `12v_out` and `20v_out` currently use the ideal INA139 linear model
+  (`ma_per_mv=50`) until each rail is measured and calibrated. Treat these
+  channels as approximate, not precision current measurements.
+- When a controllable rail is off, firmware reports `ma_est=0` for that rail
+  while still exposing `raw` and `mv` in JSON/verbose output for diagnostics.

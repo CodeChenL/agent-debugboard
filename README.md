@@ -238,9 +238,14 @@ Read current-monitor ADC channels:
 ```sh
 agent-debugboardctl adc read
 agent-debugboardctl adc read 5v_out
+agent-debugboardctl adc read -v 5v_out
 agent-debugboardctl adc read 12v_out
 agent-debugboardctl adc read 20v_out
 ```
+
+Human-readable ADC output is concise by default, for example
+`5v_out=540mA`. Use `-v` / `--verbose` when you need debug fields such as
+`signal`, `raw`, and `mv`. JSON output keeps the full structured data.
 
 Switch TF/SD route:
 
@@ -267,6 +272,7 @@ debugboard status --json
 debugboard rail list
 debugboard rail list --json
 debugboard adc read
+debugboard adc read -v 5v_out
 debugboard adc read --json
 debugboard sd get
 debugboard sd get --json
@@ -287,6 +293,15 @@ debugboard bootloader
 | 5 V current monitor | `adc read 5v_out` | `S_C_5V` |
 | 12 V current monitor | `adc read 12v_out` | `S_C_12V` |
 | 20 V current monitor | `adc read 20v_out` | `S_C_20V` |
+
+The current monitor channels use INA139 with a 0.2 mOhm shunt, 100 kOhm output
+load, and 1000 uA/V transconductance. The ideal transfer is 20 mV/A at the
+RP2040 ADC input, so `1 mV = 50 mA` and `20 mV = 1 A`. The `5v_out` channel uses
+a piecewise-linear table from local 0.1 A step measurements, with `mv <= 11`
+treated as 0 mA; `12v_out` and `20v_out` keep the ideal model until calibrated.
+See the public
+[TI INA139 datasheet](https://www.ti.com/product/INA139) for the sensor
+transfer function.
 
 The current schematic copy is stored at
 [doc/agent-debugboard-schematic.pdf](doc/agent-debugboard-schematic.pdf).

@@ -46,6 +46,7 @@ debugboard rail set 20v_out off
 debugboard adc read
 debugboard adc read --json
 debugboard adc read 5v_out
+debugboard adc read -v 5v_out
 debugboard sd get
 debugboard sd get --json
 debugboard sd route target
@@ -70,6 +71,7 @@ Host helper:
 ./agent-debugboardctl doctor
 ./agent-debugboardctl --json status
 ./agent-debugboardctl adc read
+./agent-debugboardctl adc read -v 5v_out
 ./agent-debugboardctl rail set 12v_out on
 ./agent-debugboardctl rail set 20v_out on
 ./agent-debugboardctl sd route usb-reader
@@ -86,3 +88,8 @@ Current schematic mapping:
 - `20v_out`: `GP10_20V_EN`
 - TF/SD route switch: `GP06_TF_SW`
 - ADC current monitor inputs: `S_C_5V`, `S_C_12V`, `S_C_20V`
+
+All ADC current monitor inputs use an INA139 with a 0.2 mOhm shunt and a
+100 kOhm output load. The ideal conversion is 20 mV/A at the ADC input, or
+`1 mV = 50 mA`. The `5v_out` channel uses a piecewise-linear table from local
+0.1 A step measurements, with `mv <= 11` treated as 0 mA.

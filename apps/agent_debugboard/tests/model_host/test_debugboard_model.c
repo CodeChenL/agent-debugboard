@@ -43,15 +43,70 @@ static void test_rail_table_matches_schematic(void)
 static void test_current_table_and_estimate(void)
 {
 	const struct debugboard_current_desc *current;
+	const struct debugboard_current_desc *five_volt;
+	struct debugboard_current_desc offset_current;
 
 	assert(debugboard_current_count == 3);
+
+	five_volt = debugboard_find_current("5v_out");
+	assert(five_volt != NULL);
+	assert_str_eq(five_volt->signal, "S_C_5V");
+	assert_str_eq(five_volt->sensor, "INA139");
+	assert(five_volt->adc_index == 0);
+	assert(five_volt->shunt_uohm == 200);
+	assert(five_volt->load_ohm == 100000);
+	assert(five_volt->gm_ua_per_v == 1000);
+	assert(five_volt->offset_mv == 11);
+	assert(five_volt->ma_per_mv == 50);
+	assert(five_volt->cal_points != NULL);
+	assert(five_volt->cal_point_count == 41);
 
 	current = debugboard_find_current("S_C_12V");
 	assert(current != NULL);
 	assert_str_eq(current->name, "12v_out");
+	assert_str_eq(current->sensor, "INA139");
 	assert(current->adc_index == 1);
+	assert(current->shunt_uohm == 200);
+	assert(current->load_ohm == 100000);
+	assert(current->gm_ua_per_v == 1000);
+	assert(current->offset_mv == 0);
 	assert(current->ma_per_mv == 50);
-	assert(debugboard_estimate_current_ma(42, current->ma_per_mv) == 2100);
+	assert(current->cal_points == NULL);
+	assert(current->cal_point_count == 0);
+
+	for (size_t i = 0; i < debugboard_current_count; i++) {
+		assert_str_eq(debugboard_currents[i].sensor, "INA139");
+		assert(debugboard_currents[i].shunt_uohm == 200);
+		assert(debugboard_currents[i].load_ohm == 100000);
+		assert(debugboard_currents[i].gm_ua_per_v == 1000);
+	}
+
+	assert(debugboard_estimate_current_ma(0, current) == 0);
+	assert(debugboard_estimate_current_ma(1, current) == 50);
+	assert(debugboard_estimate_current_ma(20, current) == 1000);
+	assert(debugboard_estimate_current_ma(42, current) == 2100);
+	assert(debugboard_estimate_current_ma(42, NULL) == 0);
+
+	offset_current = *current;
+	offset_current.offset_mv = 50;
+	assert(debugboard_estimate_current_ma(42, &offset_current) == 0);
+
+	assert(debugboard_estimate_current_ma(10, five_volt) == 0);
+	assert(debugboard_estimate_current_ma(11, five_volt) == 0);
+	assert(debugboard_estimate_current_ma(12, five_volt) == 200);
+	assert(debugboard_estimate_current_ma(13, five_volt) == 300);
+	assert(debugboard_estimate_current_ma(15, five_volt) == 367);
+	assert(debugboard_estimate_current_ma(17, five_volt) == 500);
+	assert(debugboard_estimate_current_ma(28, five_volt) == 1050);
+	assert(debugboard_estimate_current_ma(33, five_volt) == 1250);
+	assert(debugboard_estimate_current_ma(34, five_volt) == 1300);
+	assert(debugboard_estimate_current_ma(48, five_volt) == 2000);
+	assert(debugboard_estimate_current_ma(49, five_volt) == 2100);
+	assert(debugboard_estimate_current_ma(50, five_volt) == 2133);
+	assert(debugboard_estimate_current_ma(52, five_volt) == 2200);
+	assert(debugboard_estimate_current_ma(74, five_volt) == 3300);
+	assert(debugboard_estimate_current_ma(89, five_volt) == 4000);
+	assert(debugboard_estimate_current_ma(95, five_volt) == 4300);
 
 	assert(debugboard_find_current("5V_FIN") == NULL);
 }
