@@ -262,6 +262,38 @@ agent-debugboardctl gpio set GP13 1
 agent-debugboardctl gpio input GP13
 ```
 
+## OpenOCD / JTAG
+
+Agent DebugBoard can be used together with OpenOCD by using the DebugBoard for
+target power and recovery control while the onboard CH347F path handles target
+JTAG/SWD. The CH347F is wired directly to the target debug connector; RP2040
+does not sit in that path and does not act as a CMSIS-DAP or JTAG probe.
+
+Install OpenOCD, then verify it:
+
+```sh
+openocd --version
+```
+
+Power the target, then start OpenOCD with the CH347F interface script available
+in your OpenOCD installation and the target configuration for the board under
+test:
+
+```sh
+agent-debugboardctl --json rail set 5v_out on
+openocd -f interface/<ch347-interface>.cfg -f target/<target>.cfg
+```
+
+CH347F support depends on the OpenOCD build. If the system OpenOCD package does
+not include a CH347F interface script, use the WCH/vendor OpenOCD build or add
+the matching interface script.
+
+OpenOCD normally exposes GDB on TCP `3333` and telnet control on TCP `4444`.
+Prefer OpenOCD reset commands such as `reset halt` or the target OS reboot path
+first. Use rail power-cycling only as a hard-restart fallback.
+
+See [doc/openocd/README.md](doc/openocd/README.md) for the full workflow.
+
 ## Direct Shell
 
 Open the CDC serial device and use the `debugboard` shell command:
@@ -327,7 +359,7 @@ apps/agent_debugboard/src/    Firmware source and shared board model
 apps/agent_debugboard/tests/  Unit tests
 cmd/agent-debugboardctl/      Go host CLI entrypoint
 internal/hostcli/             Go host CLI implementation
-doc/                          Hardware documents and marketing assets
+doc/                          Hardware documents, OpenOCD configs, and marketing assets
 skills/agent-debugboard/      Agent-facing skill and operating guide
 .goreleaser.yaml              GoReleaser host CLI packaging config
 go.mod, go.sum                Go module for host CLI

@@ -77,6 +77,16 @@ Host helper:
 ./agent-debugboardctl sd route usb-reader
 ```
 
+OpenOCD:
+
+```sh
+./agent-debugboardctl rail set 5v_out on
+openocd -f interface/<ch347-interface>.cfg -f target/<target>.cfg
+```
+
+JTAG/SWD goes through the onboard CH347F path, which is wired directly to the
+target debug connector. The RP2040 firmware does not act as a debug probe.
+
 Rail naming intentionally distinguishes controllable 5V rails from `5V_FIN`.
 The firmware does not control `5V_FIN`.
 

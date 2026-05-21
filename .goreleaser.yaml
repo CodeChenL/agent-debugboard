@@ -38,6 +38,7 @@ archives:
     files:
       - README.md
       - README.zh-CN.md
+      - doc/openocd/*
 
 checksum:
   name_template: "checksums.txt"

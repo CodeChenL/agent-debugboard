@@ -255,6 +255,36 @@ agent-debugboardctl gpio set GP13 1
 agent-debugboardctl gpio input GP13
 ```
 
+## OpenOCD / JTAG
+
+Agent DebugBoard 可以和 OpenOCD 配合使用：DebugBoard 负责目标板供电和恢复
+控制，板载 CH347F 路径负责目标板 JTAG/SWD。CH347F 直连目标调试口，RP2040
+不在 JTAG/SWD 数据链路中，也不会把 DebugBoard 自己模拟成 CMSIS-DAP 或 JTAG
+probe。
+
+安装 OpenOCD 后先确认版本：
+
+```sh
+openocd --version
+```
+
+先给目标板供电，然后使用本机 OpenOCD 安装里的 CH347F interface 配置和目标板
+对应的 target 配置启动 OpenOCD：
+
+```sh
+agent-debugboardctl --json rail set 5v_out on
+openocd -f interface/<ch347-interface>.cfg -f target/<target>.cfg
+```
+
+CH347F 支持取决于 OpenOCD 构建版本。如果系统包没有 CH347F interface script，
+需要使用 WCH/vendor OpenOCD 构建，或补充匹配的 interface 配置。
+
+OpenOCD 通常会在 TCP `3333` 暴露 GDB server，并在 TCP `4444` 暴露 telnet
+控制接口。目标板重启优先使用 OpenOCD 的 `reset halt`、`reset run` 或目标系统
+自己的软重启；只有软重启不可行时，才使用电源轨断电再上电作为硬重启 fallback。
+
+完整流程见 [doc/openocd/README.md](doc/openocd/README.md)。
+
 ## 直接使用 Shell
 
 打开 CDC 串口设备后，可以直接使用 `debugboard` 命令：
@@ -318,7 +348,7 @@ apps/agent_debugboard/src/    固件源码和共享板级模型
 apps/agent_debugboard/tests/  单元测试
 cmd/agent-debugboardctl/      Go 主机侧 CLI 入口
 internal/hostcli/             Go 主机侧 CLI 实现
-doc/                          硬件文档和宣传素材
+doc/                          硬件文档、OpenOCD 配置和宣传素材
 skills/agent-debugboard/      面向 Agent 的 skill 和操作规程
 .goreleaser.yaml              GoReleaser 主机侧 CLI 打包配置
 go.mod, go.sum                主机侧 CLI Go module

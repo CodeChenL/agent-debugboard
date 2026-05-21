@@ -182,6 +182,52 @@ Enter RP2040 BOOTSEL mode for flashing:
 agent-debugboardctl bootloader
 ```
 
+## OpenOCD / JTAG Workflow
+
+Use OpenOCD through the onboard CH347F path when the target board exposes
+JTAG/SWD through the debug fixture. CH347F is wired directly to the target debug
+connector. The RP2040 firmware controls target power and recovery lines; it does
+not sit in the JTAG/SWD path and does not act as a CMSIS-DAP, Picoprobe, or JTAG
+probe.
+
+First check OpenOCD availability:
+
+```sh
+openocd --version
+```
+
+If OpenOCD is missing, install it with the host OS package manager, for example
+`brew install open-ocd` on macOS or `sudo apt-get install openocd` on
+Ubuntu/Debian.
+
+Power the target first, then start OpenOCD with the CH347F interface script
+available in the host OpenOCD installation and the target config for the board
+under test:
+
+```sh
+agent-debugboardctl --json rail set 5v_out on
+agent-debugboardctl --json rail get 5v_out
+openocd -f interface/<ch347-interface>.cfg -f target/<target>.cfg
+```
+
+CH347F support depends on the OpenOCD build. If the system OpenOCD package does
+not include a CH347F interface script, use the WCH/vendor OpenOCD build or add
+the matching interface script.
+
+Use the rail that actually powers the target. If the target uses `12v_out` or
+`20v_out`, replace `5v_out` accordingly.
+
+When a reset is needed, prefer a target software reboot or OpenOCD reset command
+first:
+
+```text
+reset halt
+reset run
+```
+
+Only use rail power-cycling as a hard-restart fallback when soft reset is not
+available or the target is unresponsive.
+
 ## Safety Rules
 
 - Prefer `--json` for all non-interactive use.
